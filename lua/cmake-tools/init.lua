@@ -1111,6 +1111,9 @@ function cmake.configure_compile_commands()
   elseif const.cmake_compile_commands_from_lsp then
     cmake.compile_commands_from_lsp()
   end
+  if const.cmake_post_generate_compile_commands then
+    const.cmake_post_generate_compile_commands()
+  end
 end
 
 function cmake.compile_commands_from_soft_link()
