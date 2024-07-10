@@ -20,6 +20,7 @@ local Config = {
     env = {},
     build_dir = "",
     working_dir = "${dir.binary}",
+    use_preset = true,
     generate_options = {},
     build_options = {},
   }, -- general config
@@ -32,18 +33,18 @@ local Config = {
 
 function Config:new(const)
   local obj = {}
-  setmetatable(obj, self)
-  self.__index = self
+  setmetatable(obj, { __index = self }) -- when obj cannot find key in its table, it will try to find it from its __index value
 
-  self:update_build_dir(const.cmake_build_directory, const.cmake_build_directory)
+  obj:update_build_dir(const.cmake_build_directory, const.cmake_build_directory)
 
-  self.base_settings.generate_options = const.cmake_generate_options
-  self.base_settings.build_options = const.cmake_build_options
+  obj.base_settings.generate_options = const.cmake_generate_options
+  obj.base_settings.build_options = const.cmake_build_options
+  obj.base_settings.use_preset = const.cmake_use_preset
 
-  self.executor = const.cmake_executor
-  self.runner = const.cmake_runner
+  obj.executor = const.cmake_executor
+  obj.runner = const.cmake_runner
 
-  return self
+  return obj
 end
 
 function Config:build_directory_path()
@@ -54,11 +55,30 @@ function Config:has_build_directory()
   return self.build_directory and self.build_directory:exists()
 end
 
+---comment
+---The reason for storing no expand build directory is to make cwd selecting easier
 function Config:no_expand_build_directory_path()
   return self.base_settings.build_dir
 end
 
+---comment
+---@param build_dir string|function string or a function returning string containing path to the build dir
+---@param no_expand_build_dir string|function
 function Config:update_build_dir(build_dir, no_expand_build_dir)
+  if type(build_dir) == "function" then
+    build_dir = build_dir()
+  end
+  if type(build_dir) ~= "string" then
+    error("build_dir needs to be a string or function returning string path to the build_directory")
+  end
+  if type(no_expand_build_dir) == "function" then
+    no_expand_build_dir = no_expand_build_dir()
+  end
+  if type(no_expand_build_dir) ~= "string" then
+    error(
+      "no_expand_build_dir needs to be a string or function returning string path to the build_directory"
+    )
+  end
   local build_path = Path:new(build_dir)
   if build_path:is_absolute() then
     self.build_directory = Path:new(build_dir)
@@ -259,7 +279,7 @@ function Config:get_launch_target()
   end
   local target_info = check_result.data
 
-  return Config:get_launch_target_from_info(target_info)
+  return self:get_launch_target_from_info(target_info)
 end
 
 -- Check if build target exists
@@ -434,8 +454,17 @@ function Config:launch_targets_with_sources()
   return get_targets(self, { has_all = false, only_executable = true, query_sources = true })
 end
 
+local _virtual_targets = nil
+function Config:update_targets()
+  _virtual_targets =
+    get_targets(self, { has_all = false, only_executable = false, query_sources = true })
+end
+
 function Config:build_targets_with_sources()
-  return get_targets(self, { has_all = false, only_executable = false, query_sources = true })
+  if not _virtual_targets then
+    self:update_targets()
+  end
+  return _virtual_targets
 end
 
 return Config
